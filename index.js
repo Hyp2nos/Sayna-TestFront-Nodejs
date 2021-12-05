@@ -2,11 +2,13 @@ import express from 'express';
 import Datastore from 'nedb';
 import rateLimit from 'express-rate-limit';
 import validator from 'validator';
+import dotenv from 'dotenv'; 
 
+dotenv.config();
 //Token
-const token = "7YUVFTGH";
-const tokenPrenium = "AZFTHGJK";
-const tokenAdmin = "GHTJKLMB";
+const tokenUsers = process.env.TOKEN_USERS;
+const tokenUsersPrenium = process.env.TOKEN_USERS_PRENIUM;
+const tokenAdmin = process.env.TOKEN_ADMIN;
 
 //Database
 const dbUsers = new Datastore({filename : "users"});
@@ -45,18 +47,30 @@ app.get("/" , (req,res)=>{
 app.post("/login",(req,res)=>{
 
     const email = req.query.email || req.body.email;
-    const pass = req.query.password || req.body.password;
-    const succes =
-        {"error":false,"message":"L'utilisateur a été authentifié succés","user":{"firstname":"xxxxx","lastname":"xxxxx","role":"xxxxx","sexe":"xxxxxx","dateNaissance":"xxxx-xx-xx","createdAt":"xxxx","updateAt":"xxxxx","subscription":"xxxx"},"token":"xxxx"}
-    ;
+    const pass = req.query.password || req.body.password;       
     const donneManquant = {
         "error":true,"message":"Email/password manquants"
     }
 
     if (email!= null && pass!= null) {
        dbUsers.find({ $and: [{ email: email },{password:pass}] }, (err, docs) => {
+           console.log();
          if (docs.length != 0) {
-           res.status(200).send(succes);
+           res.status(200).send({
+             error: false,
+             message: "L'utilisateur a été authentifié succés",
+             user: {
+               firstname: docs[0].firstname,
+               lastname: docs[0].lastname,
+               role: "xxxxx",
+               sexe: docs[0].sexe,
+               dateNaissance: docs[0].dateNaissance,
+               createdAt: "xxxx",
+               updateAt: "xxxxx",
+               subscription: "xxxx",
+             },
+             token: "xxxx",
+           });
          } else {
            res
              .status(400)
@@ -108,28 +122,43 @@ app.post("/register",(req,res)=>{
 //Ajout de carte bancaire
 app.put("/user/cart",(req, res) => {
     const succes = {
-        "errror":false,"message":"Vos données ont été mise à jour"
+        "error":false,"message":"Vos données ont été mise à jour"
     };
     const cartNumber = req.body.cartNumber;
     const month = req.body.month;
     const year = req.body.year;
     const defaul = req.body.defaul;
     if (cartNumber!= null && year!= null && month!=null && defaul!= null) {
-         const bearerToken = bearer(req);
-         if (bearerToken == token) {
-           res.status(200).send(succes);
+        if (cartNumber.length>4 && month.length==2 && year.length==4) {
+            const bearerToken = bearer(req);
+         if (bearerToken == tokenUsers || bearerToken ==  tokenUsersPrenium) {
+              dbCarts.find({ cartNumber:cartNumber }, (err, docs) => {
+                if (docs.length != 0) {
+                  res.status(409).send({ error: true,message:"La carte existe déjà"});
+                } else {
+                  dbCarts.insert(req.body);
+                  res.status(200).send(succes);
+                }
+              });
          } else {
-           res.status(401).send({ error: true, message: "Votre token n'est pas correct" });
+          if (bearerToken == tokenAdmin) {
+              res.status(403).send({"error":true,"message":"Vos droits d'accès ne permettent pas d'accéder à la ressource"})
+          }else{
+            res.status(401).send({ error: true, message: "Votre token n'est pas correct" });
+          }
          }   
+        }else{
+            res.status(409).send({"error":true,"message":"Une ou plusieurs données sont erronées"})
+        }
     }else{
-        
+        res.status(402).send({"error":"true","message":"Informations bancaire incorrectes"});
     }
 })
 
 //Suppression du compte
 app.delete("/user",(req,res)=>{
     const bearerToken = bearer(req);
-    if (bearerToken == token) {
+    if (bearerToken == tokenUsers || bearerToken == tokenUsersPrenium) {
       res.status(200).send({ error: false, message: "Votre compte a été supprimé avec succès" });
     } else {
       res.status(401).send({ error: true, message: "Votre token n'est pas correct" });
@@ -139,15 +168,15 @@ app.delete("/user",(req,res)=>{
 //Listing des sources audio
 app.get("/songs",(req,res)=>{
     const bearerToken = bearer(req);
-    const succes = {
-        "error":false,"songs":[{
-            "id":"xxxxx","name":"xxxxx","url":"xxxx","cover":"xxxx","time":"xxxx","createdAt":"xxxx","updateAt":"xxxxx","type":"xxxxx"
-        }]
-    };
-    if (bearerToken == tokenPrenium) {
-      res.status(200).send(succes);
+    if (bearerToken == tokenUsersPrenium) {
+        dbSongs.find({},(err,docs)=>{
+             res.status(200).send({
+               error: false,
+               songs: docs
+             });
+        })
     } else {
-     if (bearerToken == token) {
+     if (bearerToken == tokenUsers) {
         res.status(403).send({ error: true, message: "Votre adonnement ne permet pas d'accéder à la ressource" });
      }else{
         res.status(401).send({ error: true, message: "Votre token n'est pas correct" });
@@ -159,36 +188,20 @@ app.get("/songs",(req,res)=>{
 //Récupération d'une souece audio
 app.get("/songs/:id",(req,res)=>{
     const bearerToken = bearer(req);
-    const succes = {
-      error: false,
-      songs: 
-        {
-          id: "xxxxx",
-          name: "xxxxx",
-          url: "xxxx",
-          cover: "xxxx",
-          time: "xxxx",
-          createdAt: "xxxx",
-          updateAt: "xxxxx",
-          type: "xxxxx",
-        }
-    };
     const id = req.params.id;
    if (id!=null) {
-        if (bearerToken == tokenPrenium) {
-          res.status(200).send(succes);
+        if (bearerToken == tokenUsersPrenium) {
+            dbSongs.find({_id:id}, (err, docs) => {
+              res.status(200).send({
+                error: false,
+                songs: docs[0],
+              });
+            });
         } else {
-          if (bearerToken == token) {
             res.status(403).send({
               error: true,
-              message:
-                "Votre adonnement ne permet pas d'accéder à la ressource",
+              message:"Votre adonnement ne permet pas d'accéder à la ressource",
             });
-          } else {
-            res
-              .status(401)
-              .send({ error: true, message: "Votre token n'est pas correct" });
-          }
         }
    }else{
     res.status(409).send({"error":true,"message":"L'audio n'est pas accessibles"})
@@ -197,14 +210,14 @@ app.get("/songs/:id",(req,res)=>{
 
 //Récupération des factures
 app.get("/bills",(req,res)=>{
-    const bearerToken = bearer(req);
-    const succes = {
-        "error":false,"bill":[{
-            "id":"xxxxx","id_Stripe":"xxxxx","date_payment":"xxxxx","monatant_ht":"xxxxxxx","montant_ttc":"xxxxxx","source":"Stripe","createdAt":"xxxxx","updateAt":"xxxxxx"
-        }]
-    };
+    const bearerToken = bearer(req); 
     if (bearerToken==tokenAdmin) {
-        res.status(200).send(succes);
+        dbBills.find({},(err,docs)=>{
+             res.status(200).send({
+               error: false,
+               bill: docs,
+             });
+        })
     }else{
         res.status(403).send({"error":true,"message":"Vos droits d'accés ne permettent pas d'accéder à la ressource"})
     }

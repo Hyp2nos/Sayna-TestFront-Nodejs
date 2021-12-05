@@ -1,0 +1,2 @@
+{"_id":"1","id_Stripe":"xxxxx","date_payment":"12/12/21","monatant_ht":"1200","montant_ttc":"1800","source":"Stripe","createdAt":"xxxxx","updateAt":"xxxxxx"}
+{"_id":"2","id_Stripe":"xxxxx","date_payment":"10/10/21","monatant_ht":"3500","montant_ttc":"4000","source":"Stripe","createdAt":"xxxxx","updateAt":"xxxxxx"}
