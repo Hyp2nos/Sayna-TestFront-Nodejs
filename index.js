@@ -1,18 +1,35 @@
 import express from 'express';
 import Datastore from 'nedb';
+import rateLimit from 'express-rate-limit';
+import validator from 'validator';
 
-
+//Token
 const token = "7YUVFTGH";
 const tokenPrenium = "AZFTHGJK";
-const tokenAdmin = "GHTJKLMB"
+const tokenAdmin = "GHTJKLMB";
+
+//Database
 const dbUsers = new Datastore({filename : "users"});
+const dbSongs = new Datastore({filename: "songs"})
+const dbBills = new Datastore({filename: "bills"})
+const dbCarts = new Datastore({filename: "carts"})
 dbUsers.loadDatabase();
+dbSongs.loadDatabase();
+dbBills.loadDatabase();
+dbCarts.loadDatabase();
+
+//Ratelimiter
+const limiter =  rateLimit({
+    windowMs : 2*60*1000,
+    max: 5
+});
+
 
 //Lancement d'express
 const app = express();
 
 app.use(express.json());
-
+app.use("/login",limiter);
 //API PLAN
 
 //Affichage de la page index.html
@@ -28,7 +45,7 @@ app.get("/" , (req,res)=>{
 app.post("/login",(req,res)=>{
 
     const email = req.query.email || req.body.email;
-    const pass = req.query.password || req.body.email;
+    const pass = req.query.password || req.body.password;
     const succes =
         {"error":false,"message":"L'utilisateur a été authentifié succés","user":{"firstname":"xxxxx","lastname":"xxxxx","role":"xxxxx","sexe":"xxxxxx","dateNaissance":"xxxx-xx-xx","createdAt":"xxxx","updateAt":"xxxxx","subscription":"xxxx"},"token":"xxxx"}
     ;
@@ -37,7 +54,15 @@ app.post("/login",(req,res)=>{
     }
 
     if (email!= null && pass!= null) {
-        res.status(200).send(succes);
+       dbUsers.find({ $and: [{ email: email },{password:pass}] }, (err, docs) => {
+         if (docs.length != 0) {
+           res.status(200).send(succes);
+         } else {
+           res
+             .status(400)
+             .send({ error: true, message: "Email/password incorrect" });
+         }
+       });   
     }
     else{
         res.status(400).send(donneManquant);
@@ -57,15 +82,23 @@ app.post("/register",(req,res)=>{
         "error":false,"message":"L'utilisateur a bien été créé avec succés","user":{
             "firstname":firstname,"lastname":lastname,"email":email,"sexe":sexe,"datetNaissance":date_naissance,"createdAt":"xxxxx","updateAt":"xxxx","subscription":0
         }
-    }
-
+    };
     const error1 = {
         "error":true,"message":"Une ou plusieurs données obligatoire sont manquantes"
     }
-
-    if (email!=null && pass!= null && firstname !=null && lastname != null && date_naissance !=null && sexe != null) {
-       
-        res.status(200).send(succes);
+    if (email!=null && pass!= null && firstname !=null && lastname != null && date_naissance !=null && sexe != null) {      
+       if (validator.isEmail(email) && pass.length >6) {
+            dbUsers.find({ email: email }, (err, docs) => {
+              if (docs.length != 0) {
+                res.status(409).send({"error":true,"message":"Un compte utilisant cette adresse mail est deéjà enregistré"})
+              } else {
+                dbUsers.insert(req.body);
+                res.status(200).send(succes);
+              }
+            });
+        }else{
+            res.status(409).send({"error":true,"message":"Une ou plusieurs données sont erronées"});
+        }
     }
     else{
         res.status(400).send(error1);
@@ -76,15 +109,21 @@ app.post("/register",(req,res)=>{
 app.put("/user/cart",(req, res) => {
     const succes = {
         "errror":false,"message":"Vos données ont été mise à jour"
+    };
+    const cartNumber = req.body.cartNumber;
+    const month = req.body.month;
+    const year = req.body.year;
+    const defaul = req.body.defaul;
+    if (cartNumber!= null && year!= null && month!=null && defaul!= null) {
+         const bearerToken = bearer(req);
+         if (bearerToken == token) {
+           res.status(200).send(succes);
+         } else {
+           res.status(401).send({ error: true, message: "Votre token n'est pas correct" });
+         }   
+    }else{
+        
     }
-    const bearerToken = bearer(req);
-        if (bearerToken == token) {
-            res.status(200).send(succes);
-        }else{
-            res.status(401).send({"error":true,"message":"Votre token n'est pas correct"});
-        }
-    
-
 })
 
 //Suppression du compte
